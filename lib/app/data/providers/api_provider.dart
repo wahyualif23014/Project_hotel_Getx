@@ -65,7 +65,6 @@ class ApiProvider {
     }
   }
 
-  // UPDATE: Memperbarui data hotel
   // PHP script kita untuk update menerima raw JSON, jadi kita gunakan http.post biasa
   Future<bool> updateHotel(Hotel hotel) async {
     try {

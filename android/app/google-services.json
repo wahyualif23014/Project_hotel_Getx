@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "197291034827",
+    "firebase_url": "https://dewaforvaluee-default-rtdb.firebaseio.com",
+    "project_id": "dewaforvaluee",
+    "storage_bucket": "dewaforvaluee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:197291034827:android:2a0f93be3d3120e08d734e",
+        "android_client_info": {
+          "package_name": "com.example.agaproject"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8QHjMKNAuBA00rgyVeglXyT74pgiWIfI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

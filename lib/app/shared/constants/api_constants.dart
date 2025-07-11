@@ -10,7 +10,7 @@ class ApiConstants {
   // Pastikan HP dan Komputer Anda terhubung ke jaringan WiFi yang sama.
   // JANGAN GUNAKAN 'localhost' atau '127.0.0.1' karena HP tidak akan mengenali itu.
 
-  static const String baseUrl = "http://192.168.1.10/api_hotel"; // <== GANTI INI
+  static const String baseUrl = "http://192.168.1.36/apiAGata"; // <== GANTI INI
   static const String hotelsUrl = "$baseUrl/read.php";
   static const String addHotelUrl = "$baseUrl/create.php";
   static const String updateHotelUrl = "$baseUrl/update.php";
