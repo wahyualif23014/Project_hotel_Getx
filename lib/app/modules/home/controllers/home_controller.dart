@@ -1,39 +1,31 @@
-// lib/app/modules/home/controllers/home_controller.dart
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 
 import '../../../data/models/hotel_models.dart';
 import '../../../data/providers/api_provider.dart';
 import '../../../data/providers/firebase_provider.dart';
 
 class HomeController extends GetxController {
-  // Instance dari provider kita
   final ApiProvider apiProvider = ApiProvider();
   final FirebaseProvider firebaseProvider = FirebaseProvider();
 
-  // Variabel untuk menyimpan state aplikasi, .obs membuatnya reaktif
   var isLoading = false.obs;
   var hotelList = <Hotel>[].obs;
-  XFile? pickedImage; // Untuk menyimpan file gambar yang dipilih
+  var pickedImage = Rx<XFile?>(null);
+  var currentPosition = Rx<Position?>(null);
 
-  // Controller untuk form text field
-  late TextEditingController nameC;
-  late TextEditingController addressC;
-  late TextEditingController descriptionC;
+  final nameC = TextEditingController();
+  final addressC = TextEditingController();
+  final descriptionC = TextEditingController();
 
-  // Method yang dijalankan saat controller pertama kali dibuat
   @override
   void onInit() {
     super.onInit();
-    nameC = TextEditingController();
-    addressC = TextEditingController();
-    descriptionC = TextEditingController();
-    fetchHotels(); // Langsung ambil data hotel saat halaman dibuka
+    fetchHotels();
   }
 
-  // Method untuk membersihkan controller saat tidak digunakan
   @override
   void onClose() {
     nameC.dispose();
@@ -42,14 +34,13 @@ class HomeController extends GetxController {
     super.onClose();
   }
 
-  // --- LOGIKA CRUD ---
+  // --- LOGIKA CRUD LENGKAP ---
 
-  // R - READ: Mengambil data dari API
+  /// R - READ
   void fetchHotels() async {
     try {
       isLoading(true);
-      final hotels = await apiProvider.getHotels();
-      hotelList.assignAll(hotels);
+      hotelList.value = await apiProvider.getHotels();
     } catch (e) {
       Get.snackbar('Error', 'Gagal memuat data hotel: $e');
     } finally {
@@ -57,79 +48,128 @@ class HomeController extends GetxController {
     }
   }
 
-  // C - CREATE: Menambah hotel baru
-  void addHotel() async {
-    if (nameC.text.isEmpty || addressC.text.isEmpty || pickedImage == null) {
-      Get.snackbar('Error', 'Nama, Alamat, dan Gambar wajib diisi.');
+  /// C - CREATE
+  void createHotel() async {
+    if (nameC.text.isEmpty || addressC.text.isEmpty || pickedImage.value == null || currentPosition.value == null) {
+      Get.snackbar('Input Tidak Lengkap', 'Nama, Alamat, Gambar, dan Lokasi wajib diisi.');
       return;
     }
-
     try {
       isLoading(true);
-      // 1. Upload gambar ke Firebase
-      String? imageUrl = await firebaseProvider.uploadImage(pickedImage!, nameC.text);
+      String? imageUrl = await firebaseProvider.uploadImage(pickedImage.value!, nameC.text);
+      if (imageUrl == null) throw Exception("Gagal mengunggah gambar.");
+      
+      bool success = await apiProvider.addHotel(
+        name: nameC.text,
+        address: addressC.text,
+        description: descriptionC.text,
+        imageUrl: imageUrl,
+        latitude: currentPosition.value!.latitude,
+        longitude: currentPosition.value!.longitude,
+      );
 
-      if (imageUrl != null) {
-        // 2. Jika upload berhasil, simpan data ke MySQL via PHP API
-        bool success = await apiProvider.addHotel(
-          name: nameC.text,
-          address: addressC.text,
-          description: descriptionC.text,
-          imageUrl: imageUrl,
-          latitude: -6.200000, // Placeholder, ganti dengan lokasi asli
-          longitude: 106.816666, // Placeholder, ganti dengan lokasi asli
-        );
-
-        if (success) {
-          Get.back(); // Kembali ke halaman utama
-          fetchHotels(); // Refresh daftar hotel
-          Get.snackbar('Sukses', 'Hotel berhasil ditambahkan.');
-          clearForm();
-        } else {
-          Get.snackbar('Error', 'Gagal menyimpan data hotel ke database.');
-        }
+      if (success) {
+        Get.back();
+        fetchHotels();
+        Get.snackbar('Sukses', 'Hotel berhasil ditambahkan.');
       } else {
-        Get.snackbar('Error', 'Gagal mengunggah gambar.');
+        Get.snackbar('Error', 'Gagal menyimpan data hotel ke database.');
       }
     } catch (e) {
       Get.snackbar('Error', 'Terjadi kesalahan: $e');
     } finally {
       isLoading(false);
+      clearForm();
     }
   }
-  
-  // D - DELETE: Menghapus hotel
+
+  /// D - DELETE
   void deleteHotel(int id) async {
+    Get.defaultDialog(
+      title: "Konfirmasi Hapus",
+      middleText: "Anda yakin ingin menghapus hotel ini?",
+      textConfirm: "Ya, Hapus",
+      onConfirm: () async {
+        Get.back();
+        try {
+          isLoading(true);
+          bool success = await apiProvider.deleteHotel(id);
+          if (success) {
+            hotelList.removeWhere((hotel) => hotel.id == id);
+            Get.snackbar('Sukses', 'Hotel berhasil dihapus.');
+          } else {
+            Get.snackbar('Error', 'Gagal menghapus hotel di server.');
+          }
+        } catch (e) {
+          Get.snackbar('Error', 'Terjadi kesalahan saat menghapus: $e');
+        } finally {
+          isLoading(false);
+        }
+      }
+    );
+  }
+  
+  // --- FUNGSI BANTUAN ---
+
+  void pickImageFromGallery() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    if (image != null) {
+      pickedImage.value = image;
+    }
+  }
+
+  void pickImageFromCamera() async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? image = await picker.pickImage(source: ImageSource.camera);
+    if (image != null) {
+      pickedImage.value = image;
+    }
+  }
+
+  /// Mengambil lokasi GPS saat ini dengan penanganan izin lengkap
+  void getCurrentLocation() async {
     try {
       isLoading(true);
-      bool success = await apiProvider.deleteHotel(id);
 
-      if (success) {
-        fetchHotels(); // Refresh list setelah hapus
-        Get.snackbar('Sukses', 'Hotel berhasil dihapus.');
-      } else {
-        Get.snackbar('Error', 'Gagal menghapus hotel.');
+      // <-- 1. CEK APAKAH LAYANAN LOKASI (GPS) AKTIF -->
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        Get.snackbar("Error", "Layanan lokasi (GPS) tidak aktif di perangkat Anda.");
+        return; // Hentikan fungsi jika GPS mati
       }
-    } catch (e) {
-      Get.snackbar('Error', 'Terjadi kesalahan saat menghapus: $e');
+
+      // <-- 2. CEK & MINTA IZIN LOKASI DARI PENGGUNA -->
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+        if (permission == LocationPermission.denied) {
+          Get.snackbar("Izin Ditolak", "Anda menolak izin untuk mengakses lokasi.");
+          return;
+        }
+      }
+      
+      // <-- 3. TANGANI JIKA IZIN DITOLAK PERMANEN -->
+      if (permission == LocationPermission.deniedForever) {
+        Get.defaultDialog(
+          title: "Izin Dibutuhkan",
+          middleText: "Anda telah menolak izin lokasi secara permanen. Harap aktifkan secara manual di pengaturan aplikasi.",
+          textConfirm: "Buka Pengaturan",
+          onConfirm: () async => await Geolocator.openAppSettings(),
+        );
+        return;
+      } 
+
+      // <-- 4. JIKA SEMUA AMAN, AMBIL POSISI SAAT INI -->
+      currentPosition.value = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high
+      );
+      Get.snackbar("Lokasi", "Lokasi saat ini berhasil didapatkan.");
+
+    } catch(e) {
+       Get.snackbar("Error", "Gagal mendapatkan lokasi: $e");
     } finally {
       isLoading(false);
-    }
-  }
-  
-  // --- Fungsi Bantuan ---
-
-  // Memilih gambar dari galeri
-  void pickImage() async {
-    final ImagePicker picker = ImagePicker();
-    try {
-      final XFile? image = await picker.pickImage(source: ImageSource.gallery);
-      if (image != null) {
-        pickedImage = image;
-        update(); // Memperbarui UI untuk menampilkan preview gambar
-      }
-    } catch (e) {
-      Get.snackbar('Error', 'Gagal memilih gambar: $e');
     }
   }
 
@@ -137,6 +177,7 @@ class HomeController extends GetxController {
     nameC.clear();
     addressC.clear();
     descriptionC.clear();
-    pickedImage = null;
+    pickedImage.value = null;
+    currentPosition.value = null;
   }
 }

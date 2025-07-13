@@ -11,12 +11,11 @@ class AppPages {
     GetPage(
       name: Routes.HOME,
       page: () => HomeView(),
-      binding: HomeBinding(), // Binding ini akan menginisialisasi HomeController
+      binding: HomeBinding(),
     ),
     GetPage(
       name: Routes.ADD_HOTEL,
       page: () => AddHotelView(),
-      // Kita bisa menggunakan binding yang sama jika controllernya sama
       binding: HomeBinding(), 
     ),
   ];
